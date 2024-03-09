@@ -81,17 +81,17 @@ class LentaParser:
         tags = doc_tree.find("a", "item dark active")
         tags = tags.get_text() if tags else None
 
-        body = doc_tree.find("div", attrs={"itemprop": "articleBody"})
+        body = doc_tree.find("div","topic-body _news")
 
         if not body:
             raise RuntimeError(f"Article body is not found")
 
-        text = " ".join([p.get_text() for p in body.find_all("p")])
+        text = " ".join([p.get_text() for p in body.find_all("p","topic-body__content-text")])
 
         topic = doc_tree.find("a", "b-header-inner__block")
         topic = topic.get_text() if topic else None
 
-        title = doc_tree.find("h1", attrs={"itemprop": "headline"})
+        title = doc_tree.find("span", "topic-body__title")
         title = title.get_text() if title else None
 
         return {"title": title, "text": text, "topic": topic, "tags": tags}
@@ -99,7 +99,9 @@ class LentaParser:
     @staticmethod
     def _extract_urls_from_html(html: str):
         doc_tree = BeautifulSoup(html, LentaParser.default_parser)
-        news_list = doc_tree.find_all("div", "item news b-tabloid__topic_news")
+       
+        news_list = doc_tree.find_all("li", "archive-page__item _news")
+        
         return tuple(f"https://lenta.ru{news.find('a')['href']}" for news in news_list)
 
     async def _fetch_all_news_on_page(self, html: str):
@@ -141,7 +143,11 @@ class LentaParser:
                 parsed_news.append(parse_res)
 
         if parsed_news:
-            self.writer.writerows(parsed_news)
+#            self.writer.writerows(parsed_news)
+           # print(parse_res)
+            file1 = open("myfile.txt", "a")  # write mode
+            file1.write(f"{parse_res['title']} \n {parse_res['text']} \n")
+            file1.close()
             self._n_downloaded += len(parsed_news)
 
         return len(parsed_news)
@@ -200,9 +206,9 @@ def main():
 
     parser.add_argument(
         "--from-date",
-        default="30.08.1999",
+        default="01.03.2024",
         type=str,
-        help="download news from this date. Example: 30.08.1999",
+        help="download news from this date. Example: 01.03.2024",
     )
 
     args = parser.parse_args()
