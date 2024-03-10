@@ -1,11 +1,12 @@
 import argparse
 import asyncio
 import csv
+from extract_entities import get_annotations
 import logging
 from concurrent.futures import ProcessPoolExecutor
 from datetime import datetime, timedelta
 from multiprocessing import cpu_count
-
+import json
 import aiohttp
 from bs4 import BeautifulSoup
 
@@ -33,6 +34,7 @@ class LentaParser:
         self._outfile_name = outfile_name
         self._outfile = None
         self._csv_writer = None
+        self._txt_writer = None
         self.timeouts = aiohttp.ClientTimeout(total=60, connect=60)
 
         self._n_downloaded = 0
@@ -47,7 +49,7 @@ class LentaParser:
             date_start += timedelta(days=1)
 
     @property
-    def writer(self):
+    def writer_csv(self):
         if self._csv_writer is None:
             self._outfile = open(self._outfile_name, "w", 1)
             self._csv_writer = csv.DictWriter(
@@ -56,7 +58,12 @@ class LentaParser:
             self._csv_writer.writeheader()
 
         return self._csv_writer
-
+    
+    @property
+    def writer_txt(self):
+        if self._txt_writer is None:
+            self._txt_writer = open(self._outfile_name, "a")
+        return self._txt_writer
     @property
     def session(self):
         if self._sess is None or self._sess.closed:
@@ -143,11 +150,13 @@ class LentaParser:
                 parsed_news.append(parse_res)
 
         if parsed_news:
-#            self.writer.writerows(parsed_news)
+#           self.writer_csv.writerows(parsed_news)
            # print(parse_res)
-            file1 = open("myfile.txt", "a")  # write mode
-            file1.write(f"{parse_res['title']} \n {parse_res['text']} \n")
-            file1.close()
+            # write mode
+            for data in parsed_news:
+                text = f"{data['title']} {data['text']}"
+                json_data = get_annotations(text)
+                self.writer_txt.write(str(json_data)+'\n')
             self._n_downloaded += len(parsed_news)
 
         return len(parsed_news)
@@ -160,7 +169,9 @@ class LentaParser:
 
         if self._outfile is not None:
             self._outfile.close()
-
+            
+        if self._txt_writer is not None:
+            self._txt_writer.close()
         self._executor.shutdown(wait=True)
 
         logger.info(f"{self._n_downloaded} news saved at {self._outfile_name}")
@@ -197,7 +208,7 @@ def main():
     parser = argparse.ArgumentParser(description="Downloads news from Lenta.Ru")
 
     parser.add_argument(
-        "--outfile", default="lenta-ru-news.csv", help="name of result file"
+        "--outfile", default="lenta-ru-news.jsonl", help="name of result file"
     )
 
     parser.add_argument(
@@ -206,7 +217,7 @@ def main():
 
     parser.add_argument(
         "--from-date",
-        default="01.03.2024",
+        default="01.01.2024",
         type=str,
         help="download news from this date. Example: 01.03.2024",
     )
